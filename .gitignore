@@ -1,0 +1,4 @@
+.state/
+__pycache__/
+.vendor/
+gold_monitor.config.json

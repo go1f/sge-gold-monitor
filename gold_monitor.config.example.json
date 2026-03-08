@@ -1,0 +1,6 @@
+{
+  "bark_url": "https://api.day.app/YOUR_BARK_KEY/",
+  "price_threshold": 1080,
+  "drop_threshold": 0.05,
+  "approach_ratio": 0.02
+}

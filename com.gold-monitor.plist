@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gold-monitor</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/zsh</string>
+    <string>-lc</string>
+    <string>mkdir -p "$HOME/Library/Application Support/gold-monitor/.state" "$HOME/Library/Logs/gold-monitor"; exec /usr/bin/env PYTHONDONTWRITEBYTECODE=1 python3 "$HOME/Library/Application Support/gold-monitor/gold_monitor.py" &gt;&gt; "$HOME/Library/Logs/gold-monitor/gold_monitor.log" 2&gt;&gt; "$HOME/Library/Logs/gold-monitor/gold_monitor.err.log"</string>
+  </array>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StartInterval</key>
+  <integer>900</integer>
+</dict>
+</plist>
