@@ -30,6 +30,8 @@ MAX_FETCH_RETRIES = 6
 SOURCE_LABEL = "源:上金所"
 DAY_SESSION_START = time(9, 0)
 DAY_SESSION_END = time(15, 30)
+NIGHT_SESSION_START = time(20, 0)
+NIGHT_SESSION_END = time(2, 30)
 MORNING_REPORT_TIME = time(9, 0)
 EVENING_REPORT_TIME = time(15, 30)
 
@@ -74,11 +76,19 @@ def now_bjt() -> datetime:
 
 
 def should_run(current: datetime) -> bool:
-    if current.weekday() >= 5:
-        return False
-    if current.hour < 9 or current.hour >= 18:
-        return False
-    return True
+    current_time = current.time()
+    weekday = current.weekday()
+
+    if DAY_SESSION_START <= current_time <= DAY_SESSION_END:
+        return weekday < 5
+
+    if current_time >= NIGHT_SESSION_START:
+        return weekday < 5
+
+    if current_time <= NIGHT_SESSION_END:
+        return weekday in {1, 2, 3, 4, 5}
+
+    return False
 
 
 def build_quote_headers() -> dict[str, str]:
