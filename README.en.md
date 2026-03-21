@@ -10,7 +10,7 @@ Lightweight local macOS monitor for SGE `Au99.99`, with Bark push notifications.
 
 - polls the official SGE minute quote endpoint every 15 minutes
 - watches `Au99.99`
-- active on trading days during `09:30-15:00` Beijing time
+- monitors the daytime session `09:30-15:00` Beijing time
 - sends a morning report after market open
 - sends an evening report after market close
 - alerts on configurable drop and target-price thresholds

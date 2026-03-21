@@ -28,10 +28,11 @@ CONFIG_PATH = Path(__file__).resolve().with_name("gold_monitor.config.json")
 TIMEOUT_SECONDS = 20
 MAX_FETCH_RETRIES = 6
 SOURCE_LABEL = "源:上金所"
-DAY_SESSION_START = time(9, 0)
-DAY_SESSION_END = time(15, 0)
+DAY_SESSION_START = time(9, 30)
+MARKET_CLOSE_TIME = time(15, 0)
+EXECUTION_END_TIME = time(15, 15)
 MORNING_REPORT_TIME = time(9, 30)
-EVENING_REPORT_TIME = time(15, 0)
+EVENING_REPORT_TIME = MARKET_CLOSE_TIME
 
 
 @dataclass
@@ -76,7 +77,7 @@ def now_bjt() -> datetime:
 def should_run(current: datetime) -> bool:
     if current.weekday() >= 5:
         return False
-    return DAY_SESSION_START <= current.time() <= DAY_SESSION_END
+    return DAY_SESSION_START <= current.time() <= EXECUTION_END_TIME
 
 
 def build_quote_headers() -> dict[str, str]:
@@ -166,7 +167,7 @@ def extract_quote(
     day_prices = [
         price
         for quoted_at, price in zip(times, prices)
-        if DAY_SESSION_START <= parse_hhmm(quoted_at) <= DAY_SESSION_END and price > 0
+        if DAY_SESSION_START <= parse_hhmm(quoted_at) <= MARKET_CLOSE_TIME and price > 0
     ]
     active_prices = day_prices or [price for price in prices if price > 0]
     if not active_prices:
