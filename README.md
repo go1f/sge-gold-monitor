@@ -6,29 +6,32 @@
 
 - 每 15 分钟轮询一次上金所官方分钟行情接口
 - 监控标的：`Au99.99`
-- 监控日盘：北京时间交易日 `09:30-15:00`
+- 监控时段：北京时间交易日 `09:30-20:00`
 - `09:30` 后发送早报
-- `15:00` 后发送晚报
+- `20:00` 后发送晚报
 - 满足条件时发送告警
 - 告警消息附带简短趋势摘要
+- 告警状态不变且价格相对上次提醒波动少于 `5` 元时，不重复提醒
 
 ## 可配置项
 
 这些值不再硬编码，放在本地配置里：
 
 - `bark_url`: Bark 推送地址
-- `price_threshold`: 目标价，默认 `1080`
+- `price_threshold`: 目标价，默认 `880`
 - `drop_threshold`: 跌幅阈值，默认 `0.05`
 - `approach_ratio`: 接近目标价判定范围，默认 `0.02`
+- `alert_repeat_delta`: 相同告警状态下再次提醒所需的最小价格波动，默认 `5`
 
 示例配置文件：
 
 ```json
 {
   "bark_url": "https://api.day.app/YOUR_BARK_KEY/",
-  "price_threshold": 1080,
+  "price_threshold": 880,
   "drop_threshold": 0.05,
-  "approach_ratio": 0.02
+  "approach_ratio": 0.02,
+  "alert_repeat_delta": 5
 }
 ```
 
@@ -94,12 +97,16 @@ PYTHONDONTWRITEBYTECODE=1 python3 "$REPO_DIR/gold_monitor.py" --test-push
 ```bash
 REPO_DIR="$(pwd)"
 INSTALL_DIR="$HOME/Library/Application Support/gold-monitor"
-mkdir -p "$INSTALL_DIR" "$HOME/Library/Logs/gold-monitor"
+LAUNCH_AGENT_PATH="$HOME/Library/LaunchAgents/com.gold-monitor.plist"
+mkdir -p "$INSTALL_DIR" "$HOME/Library/Logs/gold-monitor" "$HOME/Library/LaunchAgents"
+cp "$REPO_DIR/gold-monitor" "$INSTALL_DIR/gold-monitor"
 cp "$REPO_DIR/gold_monitor.py" "$INSTALL_DIR/gold_monitor.py"
-cp "$REPO_DIR/com.gold-monitor.plist" "$INSTALL_DIR/com.gold-monitor.plist"
+cp "$REPO_DIR/com.gold-monitor.plist" "$LAUNCH_AGENT_PATH"
 cp "$REPO_DIR/gold_monitor.config.json" "$INSTALL_DIR/gold_monitor.config.json"
+chmod +x "$INSTALL_DIR/gold-monitor"
+chmod +x "$INSTALL_DIR/gold_monitor.py"
 launchctl bootout "gui/$(id -u)/com.gold-monitor" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$REPO_DIR/com.gold-monitor.plist"
+launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_PATH"
 launchctl kickstart -k "gui/$(id -u)/com.gold-monitor"
 ```
 
@@ -120,11 +127,15 @@ PYTHONDONTWRITEBYTECODE=1 BARK_URL="https://api.day.app/YOUR_BARK_KEY/" python3 
 ```bash
 REPO_DIR="$(pwd)"
 INSTALL_DIR="$HOME/Library/Application Support/gold-monitor"
-mkdir -p "$INSTALL_DIR" "$HOME/Library/Logs/gold-monitor"
+LAUNCH_AGENT_PATH="$HOME/Library/LaunchAgents/com.gold-monitor.plist"
+mkdir -p "$INSTALL_DIR" "$HOME/Library/Logs/gold-monitor" "$HOME/Library/LaunchAgents"
+cp "$REPO_DIR/gold-monitor" "$INSTALL_DIR/gold-monitor"
 cp "$REPO_DIR/gold_monitor.py" "$INSTALL_DIR/gold_monitor.py"
-cp "$REPO_DIR/com.gold-monitor.plist" "$INSTALL_DIR/com.gold-monitor.plist"
+cp "$REPO_DIR/com.gold-monitor.plist" "$LAUNCH_AGENT_PATH"
+chmod +x "$INSTALL_DIR/gold-monitor"
+chmod +x "$INSTALL_DIR/gold_monitor.py"
 launchctl bootout "gui/$(id -u)/com.gold-monitor" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$REPO_DIR/com.gold-monitor.plist"
+launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_PATH"
 launchctl kickstart -k "gui/$(id -u)/com.gold-monitor"
 ```
 

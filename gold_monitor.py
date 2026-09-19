@@ -21,16 +21,17 @@ HOME_URL = "https://www.sge.com.cn/"
 QUOTE_API_URL = "https://www.sge.com.cn/graph/quotations"
 DEFAULT_SYMBOL = "Au99.99"
 DEFAULT_DROP_THRESHOLD = 0.05
-DEFAULT_PRICE_THRESHOLD = 1080.0
+DEFAULT_PRICE_THRESHOLD = 880.0
 DEFAULT_APPROACH_RATIO = 0.02
+DEFAULT_ALERT_REPEAT_DELTA = 5.0
 STATE_PATH = Path(__file__).resolve().parent / ".state" / "gold_monitor_state.json"
 CONFIG_PATH = Path(__file__).resolve().with_name("gold_monitor.config.json")
 TIMEOUT_SECONDS = 20
 MAX_FETCH_RETRIES = 6
 SOURCE_LABEL = "源:上金所"
 DAY_SESSION_START = time(9, 30)
-MARKET_CLOSE_TIME = time(15, 0)
-EXECUTION_END_TIME = time(15, 15)
+MARKET_CLOSE_TIME = time(20, 0)
+EXECUTION_END_TIME = time(20, 15)
 MORNING_REPORT_TIME = time(9, 30)
 EVENING_REPORT_TIME = MARKET_CLOSE_TIME
 
@@ -52,6 +53,7 @@ class Quote:
     trend: TrendSnapshot
     price_threshold: float
     drop_threshold: float
+    alert_repeat_delta: float
 
     @property
     def drop_ratio(self) -> float:
@@ -155,6 +157,7 @@ def extract_quote(
     price_threshold: float = DEFAULT_PRICE_THRESHOLD,
     drop_threshold: float = DEFAULT_DROP_THRESHOLD,
     approach_ratio: float = DEFAULT_APPROACH_RATIO,
+    alert_repeat_delta: float = DEFAULT_ALERT_REPEAT_DELTA,
 ) -> Quote:
     if payload.get("heyue") != symbol:
         raise ValueError(f"Unexpected symbol in quote payload: {payload.get('heyue')}")
@@ -184,6 +187,7 @@ def extract_quote(
         trend=trend,
         price_threshold=price_threshold,
         drop_threshold=drop_threshold,
+        alert_repeat_delta=alert_repeat_delta,
     )
 
 
@@ -314,19 +318,29 @@ def build_alert(quote: Quote) -> dict[str, Any] | None:
     )
     dedupe_key = "|".join(
         [
-            quote.quote_time,
             f"drop:{int(quote.drop_ratio > quote.drop_threshold)}",
             f"below:{int(quote.price < quote.price_threshold)}",
             quote.trend.status,
         ]
     )
-    return {"title": title, "body": body, "dedupe_key": dedupe_key}
+    return {
+        "title": title,
+        "body": body,
+        "dedupe_key": dedupe_key,
+        "price": quote.price,
+        "repeat_delta": quote.alert_repeat_delta,
+    }
 
 
 def should_send_alert(state: dict[str, Any], alert: dict[str, Any], force_send: bool) -> bool:
     if force_send:
         return True
-    return state.get("last_alert_key") != alert["dedupe_key"]
+    if state.get("last_alert_key") != alert["dedupe_key"]:
+        return True
+    last_alert_price = state.get("last_alert_price")
+    if not isinstance(last_alert_price, (int, float)):
+        return True
+    return abs(alert["price"] - float(last_alert_price)) >= alert["repeat_delta"]
 
 
 def send_bark(bark_url: str, title: str, body: str) -> None:
@@ -353,6 +367,7 @@ def main() -> int:
     price_threshold = get_float_config(config, "price_threshold", DEFAULT_PRICE_THRESHOLD)
     drop_threshold = get_float_config(config, "drop_threshold", DEFAULT_DROP_THRESHOLD)
     approach_ratio = get_float_config(config, "approach_ratio", DEFAULT_APPROACH_RATIO)
+    alert_repeat_delta = get_float_config(config, "alert_repeat_delta", DEFAULT_ALERT_REPEAT_DELTA)
 
     if not args.dry_run and not args.test_push and not should_run(current):
         return 0
@@ -364,6 +379,7 @@ def main() -> int:
             price_threshold=price_threshold,
             drop_threshold=drop_threshold,
             approach_ratio=approach_ratio,
+            alert_repeat_delta=alert_repeat_delta,
         )
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
         print(f"[gold-monitor] failed to fetch quote: {exc}", file=sys.stderr)
@@ -432,6 +448,7 @@ def main() -> int:
             print(f"[gold-monitor] failed to send Bark: {exc}", file=sys.stderr)
             return 1
         state["last_alert_key"] = alert["dedupe_key"]
+        state["last_alert_price"] = alert["price"]
 
     save_state(args.state_path, state)
     return 0
