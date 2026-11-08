@@ -1,181 +1,53 @@
-# 上金所金价监控
+# 上金所黄金价格监控
 
-这是一个本地运行的 macOS 金价监控脚本，用来监控上海黄金交易所 `Au99.99`，并通过 Bark 推送到手机。
+macOS 后台监控上海黄金交易所 `Au99.99`，价格单位为人民币元/克，通过 Bark 推送。
 
-## 功能
+- 每 60 秒检查一次，覆盖工作日日盘及夜盘（含周六凌晨的周五夜盘）。
+- 价格 **≤850 元/克**时推送一次购入价位提醒。发送状态持久化，跨日和重启不会重复提醒；不因其它涨跌、接近目标或跌幅触发。
+- 工作日北京时间 **09:30** 后取得有效行情时发送一次早报，包含日盘开盘价及现价。最晚补发到 11:30。
+- 周末日盘、休市、过期或异常行情不推送；没有晚报。
+- 校验官方时间戳、当前分钟和数据有效性，不读取时间轴上的未来占位价格。超过 15 分钟未更新或时间不一致的行情不会推送。
+- Bark key 仅存在本地忽略的配置文件中；权限为 `600`，不写入日志或仓库。
 
-- 每 15 分钟轮询一次上金所官方分钟行情接口
-- 监控标的：`Au99.99`
-- 监控时段：北京时间交易日 `09:30-20:00`
-- `09:30` 后发送早报
-- `20:00` 后发送晚报
-- 满足条件时发送告警
-- 告警消息附带简短趋势摘要
-- 告警状态不变且价格相对上次提醒波动少于 `5` 元时，不重复提醒
+## 安装
 
-## 可配置项
+需要 macOS、Python 3.9+；无第三方 Python 依赖。
 
-这些值不再硬编码，放在本地配置里：
+```sh
+cp gold_monitor.config.example.json gold_monitor.config.json
+# 编辑本地配置，填写自己的 Bark URL
+python3 -m unittest -v
+python3 gold_monitor.py --dry-run
+python3 gold_monitor.py --test-push
+python3 install.py
+```
 
-- `bark_url`: Bark 推送地址
-- `price_threshold`: 目标价，默认 `880`
-- `drop_threshold`: 跌幅阈值，默认 `0.05`
-- `approach_ratio`: 接近目标价判定范围，默认 `0.02`
-- `alert_repeat_delta`: 相同告警状态下再次提醒所需的最小价格波动，默认 `5`
+`install.py` 自动适配当前用户和 Python 路径，重复执行可升级。安装会替换同名 `com.gold-monitor` LaunchAgent，保留历史状态。
 
-示例配置文件：
+实际配置：
 
 ```json
 {
   "bark_url": "https://api.day.app/YOUR_BARK_KEY/",
-  "price_threshold": 880,
-  "drop_threshold": 0.05,
-  "approach_ratio": 0.02,
-  "alert_repeat_delta": 5
+  "price_threshold": 850
 }
 ```
 
-真实配置文件名是 `gold_monitor.config.json`，已被 Git 忽略。
+任务文件位于 `~/Library/LaunchAgents/com.gold-monitor.plist`；运行文件及私有配置位于 `~/Library/Application Support/gold-monitor/`；状态文件位于该目录的 `.state/gold_monitor_state.json`；日志位于 `~/Library/Logs/gold-monitor/`。
 
-## 运行流程
-
-```mermaid
-flowchart LR
-    A["launchd"] --> B["抓取上金所分钟行情"]
-    B --> C["计算开盘价 / 现价 / 趋势"]
-    C --> D["早报 / 晚报 / 告警判断"]
-    D --> E["Bark 推送"]
-    C --> F["写入本地状态"]
-```
-
-## 主要文件
-
-- `gold_monitor.py`: 监控与推送逻辑
-- `com.gold-monitor.plist`: macOS `LaunchAgent`
-- `gold_monitor.config.example.json`: 本地配置模板
-- `README.en.md`: 英文说明
-
-## 消息示例
-
-早报：
-
-```text
-Au99.99 早报
-开市价 1128.00 元/克，现价 1128.00。
-趋势:暂稳 15m+0.0 60m+0.0 距目标+48.0。 源:上金所
-```
-
-告警：
-
-```text
-Au99.99 告警
-现价 1078.00 元/克，今开 1135.00。
-触发:跌幅 5.02%；跌破 1080。
-趋势:下行接近目标 15m-4.0 60m-18.0 距目标-2.0。 源:上金所
-```
-
-## 快速开始
-
-进入仓库目录后，直接执行下面这组命令：
-
-```bash
-REPO_DIR="$(pwd)"
-cp "$REPO_DIR/gold_monitor.config.example.json" "$REPO_DIR/gold_monitor.config.json"
-open -e "$REPO_DIR/gold_monitor.config.json"
-```
-
-把 `gold_monitor.config.json` 里的 `bark_url` 改成你自己的 Bark 地址。保存后继续执行：
-
-```bash
-REPO_DIR="$(pwd)"
-PYTHONDONTWRITEBYTECODE=1 python3 "$REPO_DIR/gold_monitor.py" --dry-run
-PYTHONDONTWRITEBYTECODE=1 python3 "$REPO_DIR/gold_monitor.py" --test-push
-```
-
-确认没问题后，安装后台任务：
-
-```bash
-REPO_DIR="$(pwd)"
-INSTALL_DIR="$HOME/Library/Application Support/gold-monitor"
-LAUNCH_AGENT_PATH="$HOME/Library/LaunchAgents/com.gold-monitor.plist"
-mkdir -p "$INSTALL_DIR" "$HOME/Library/Logs/gold-monitor" "$HOME/Library/LaunchAgents"
-cp "$REPO_DIR/gold-monitor" "$INSTALL_DIR/gold-monitor"
-cp "$REPO_DIR/gold_monitor.py" "$INSTALL_DIR/gold_monitor.py"
-cp "$REPO_DIR/com.gold-monitor.plist" "$LAUNCH_AGENT_PATH"
-cp "$REPO_DIR/gold_monitor.config.json" "$INSTALL_DIR/gold_monitor.config.json"
-chmod +x "$INSTALL_DIR/gold-monitor"
-chmod +x "$INSTALL_DIR/gold_monitor.py"
-launchctl bootout "gui/$(id -u)/com.gold-monitor" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_PATH"
-launchctl kickstart -k "gui/$(id -u)/com.gold-monitor"
-```
-
-## 本地检查
-
-```bash
-REPO_DIR="$(pwd)"
-PYTHONDONTWRITEBYTECODE=1 python3 "$REPO_DIR/gold_monitor.py" --dry-run
-```
-
-```bash
-REPO_DIR="$(pwd)"
-PYTHONDONTWRITEBYTECODE=1 BARK_URL="https://api.day.app/YOUR_BARK_KEY/" python3 "$REPO_DIR/gold_monitor.py" --test-push
-```
-
-## 重新安装或升级
-
-```bash
-REPO_DIR="$(pwd)"
-INSTALL_DIR="$HOME/Library/Application Support/gold-monitor"
-LAUNCH_AGENT_PATH="$HOME/Library/LaunchAgents/com.gold-monitor.plist"
-mkdir -p "$INSTALL_DIR" "$HOME/Library/Logs/gold-monitor" "$HOME/Library/LaunchAgents"
-cp "$REPO_DIR/gold-monitor" "$INSTALL_DIR/gold-monitor"
-cp "$REPO_DIR/gold_monitor.py" "$INSTALL_DIR/gold_monitor.py"
-cp "$REPO_DIR/com.gold-monitor.plist" "$LAUNCH_AGENT_PATH"
-chmod +x "$INSTALL_DIR/gold-monitor"
-chmod +x "$INSTALL_DIR/gold_monitor.py"
-launchctl bootout "gui/$(id -u)/com.gold-monitor" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$LAUNCH_AGENT_PATH"
-launchctl kickstart -k "gui/$(id -u)/com.gold-monitor"
-```
-
-首次安装时再补这一步：
-
-```text
-$HOME/Library/Application Support/gold-monitor/gold_monitor.config.json
-```
-
-## 日常维护
-
-查看任务状态：
-
-```bash
+```sh
 launchctl print "gui/$(id -u)/com.gold-monitor"
+tail -n 30 "$HOME/Library/Logs/gold-monitor/gold_monitor.err.log"
 ```
 
-查看日志：
+`--dry-run` 不发送消息、不修改状态；`--test-push` 单独测试 Bark，不依赖行情可用性。收到 Bark 服务端成功确认后才记录发送状态。
 
-- `$HOME/Library/Logs/gold-monitor/gold_monitor.log`
-- `$HOME/Library/Logs/gold-monitor/gold_monitor.err.log`
+## 运行边界
 
-查看最近一次状态：
+这是本机 LaunchAgent：登录后自动启动；电脑关机、休眠或断网时不能检查或推送。恢复后会继续运行；若恢复时已超过早报窗口，不补发当天早报。需要全天候运行时，应将监控迁移至常开服务器。
 
-- `$HOME/Library/Application Support/gold-monitor/.state/gold_monitor_state.json`
+休市通过官方行情是否及时更新判断，没有独立维护节假日日历；官方接口不可用、时间异常或超过 15 分钟未更新时保持静默并记录错误。因此不收到早报也可能是行情故障或电脑离线，不能据此确认休市。行情本身可能存在延迟，60 秒轮询不等于成交所实时推送。
 
-## 换电脑怎么迁移
+购入提醒每个目标价只发送一次；需要重新启用相同目标时，从安装目录状态文件删除 `notified_threshold` 字段。调整仓库配置后重新执行 `python3 install.py`。
 
-1. 克隆仓库
-2. 新建本地 `gold_monitor.config.json`
-3. 填上那台设备自己的 Bark 地址和阈值
-4. 安装 `LaunchAgent`
-5. 跑一次测试推送
-
-## 数据源说明
-
-运行时直接调用上金所官方接口，而不是在运行时依赖 AKShare。
-
-原因：
-
-- AKShare 适合查文档和做交叉验证
-- 生产运行时直连官方接口更轻、更稳
-- 少一层依赖，维护更简单
+数据来源：[上海黄金交易所官网](https://www.sge.com.cn/)，官方分钟行情接口 `/graph/quotations`。该品种价格不等于零售金饰价格。

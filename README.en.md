@@ -1,63 +1,15 @@
-# SGE Gold Monitor
+# SGE gold monitor
 
-Local macOS monitor for Shanghai Gold Exchange `Au99.99`, with Bark push notifications.
+A local macOS LaunchAgent monitors Shanghai Gold Exchange Au99.99 every 60 seconds during weekday day and night sessions, including Saturday's early continuation of Friday night.
 
-## Purpose
+Notifications via Bark:
 
-Lightweight local macOS monitor for SGE `Au99.99`, with Bark push notifications.
+- One purchase-target notification when price is **at or below CNY 850/gram**. The acknowledgement persists across restarts and days. Other fluctuations do not trigger notifications.
+- One morning report from **09:30 Asia/Shanghai**, only with fresh valid trading data; retries until 11:30. No evening reports or weekend daytime reports.
+- Closed-market, stale, inconsistent and unavailable quotes remain silent. Closures are inferred from official quote freshness rather than a separate holiday calendar.
 
-## Features
+Copy `gold_monitor.config.example.json` to the git-ignored `gold_monitor.config.json` and set your private Bark URL. Run `python3 -m unittest -v`, `python3 gold_monitor.py --dry-run`, `python3 gold_monitor.py --test-push`, then `python3 install.py`.
 
-- polls the official SGE minute quote endpoint every 15 minutes
-- watches `Au99.99`
-- monitors the trading window `09:30-20:00` Beijing time
-- sends a morning report after market open
-- sends an evening report after market close
-- alerts on configurable drop and target-price thresholds
-- appends a short trend summary
-- suppresses repeat alerts when the price move since the last alert is under `5`
+The installer resolves the current user and Python interpreter automatically. It installs `com.gold-monitor` under `~/Library/LaunchAgents` and stores runtime files and persistent state under `~/Library/Application Support/gold-monitor`. Logs are under `~/Library/Logs/gold-monitor`. Config permissions are 600. Reinstalling preserves state.
 
-## Configurable Values
-
-All important thresholds are local config values instead of hardcoded constants:
-
-- `bark_url`
-- `price_threshold`
-- `drop_threshold`
-- `approach_ratio`
-- `alert_repeat_delta`
-
-Example:
-
-```json
-{
-  "bark_url": "https://api.day.app/YOUR_BARK_KEY/",
-  "price_threshold": 880,
-  "drop_threshold": 0.05,
-  "approach_ratio": 0.02,
-  "alert_repeat_delta": 5
-}
-```
-
-Use `gold_monitor.config.example.json` as the template, then create a local `gold_monitor.config.json`.
-
-## Files
-
-- `gold_monitor.py`
-- `com.gold-monitor.plist`
-- `gold_monitor.config.example.json`
-- `README.md` for the primary Chinese documentation
-
-## Operation Flow
-
-```mermaid
-flowchart LR
-    A["launchd"] --> B["Fetch SGE quotes"]
-    B --> C["Compute price and trend"]
-    C --> D["Reports / Alerts"]
-    D --> E["Bark push"]
-```
-
-## Scheduling
-
-The LaunchAgent runs the installed `gold-monitor` entrypoint directly every 15 minutes, instead of wrapping it with `zsh`.
+The Mac must be awake, logged in and online. An absent morning report can also mean a source failure or offline Mac. Quotes may be delayed; a 60-second poll is not an exchange real-time feed. See [the Chinese README](README.md) for operational details.

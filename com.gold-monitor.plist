@@ -2,27 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key>
-  <string>com.gold-monitor</string>
-
-  <key>ProgramArguments</key>
-  <array>
-    <string>/Users/jyufu/Library/Application Support/gold-monitor/gold-monitor</string>
-  </array>
-
-  <key>WorkingDirectory</key>
-  <string>/Users/jyufu/Library/Application Support/gold-monitor</string>
-
-  <key>StandardOutPath</key>
-  <string>/Users/jyufu/Library/Logs/gold-monitor/gold_monitor.log</string>
-
-  <key>StandardErrorPath</key>
-  <string>/Users/jyufu/Library/Logs/gold-monitor/gold_monitor.err.log</string>
-
-  <key>RunAtLoad</key>
-  <true/>
-
-  <key>StartInterval</key>
-  <integer>900</integer>
+  <key>Label</key><string>com.gold-monitor</string>
+  <!-- install.py resolves interpreter and paths for the current user. -->
+  <key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>gold_monitor.py</string></array>
+  <key>EnvironmentVariables</key><dict><key>PYTHONDONTWRITEBYTECODE</key><string>1</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>StartInterval</key><integer>60</integer>
+  <key>ProcessType</key><string>Background</string>
 </dict>
 </plist>
