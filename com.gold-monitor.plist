@@ -3,8 +3,8 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.gold-monitor</string>
-  <!-- install.py resolves interpreter and paths for the current user. -->
-  <key>ProgramArguments</key><array><string>/usr/bin/python3</string><string>gold_monitor.py</string></array>
+  <!-- install.py compiles gold-monitor and resolves paths for the current user. -->
+  <key>ProgramArguments</key><array><string>gold-monitor</string></array>
   <key>EnvironmentVariables</key><dict><key>PYTHONDONTWRITEBYTECODE</key><string>1</string></dict>
   <key>RunAtLoad</key><true/>
   <key>StartInterval</key><integer>60</integer>

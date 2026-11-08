@@ -1,2 +1,0 @@
-#!/bin/sh
-exec /usr/bin/env PYTHONDONTWRITEBYTECODE=1 python3 "$(dirname "$0")/gold_monitor.py" "$@"

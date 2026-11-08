@@ -11,7 +11,7 @@ macOS 后台监控上海黄金交易所 `Au99.99`，价格单位为人民币元/
 
 ## 安装
 
-需要 macOS、Python 3.9+；无第三方 Python 依赖。
+需要 macOS、Framework 版 Python 3.9+ 和 Xcode Command Line Tools（`cc`）；无第三方 Python 依赖。
 
 ```sh
 cp gold_monitor.config.example.json gold_monitor.config.json
@@ -22,7 +22,7 @@ python3 gold_monitor.py --test-push
 python3 install.py
 ```
 
-`install.py` 自动适配当前用户和 Python 路径，重复执行可升级。安装会替换同名 `com.gold-monitor` LaunchAgent，保留历史状态。
+`install.py` 自动适配当前用户和 Python 路径，编译名为 `gold-monitor` 的原生可执行文件；后台进程名称为 `gold-monitor`，在进程内加载 Python 运行时，不启动 `python3` 子进程。重复执行可升级。安装会替换同名 `com.gold-monitor` LaunchAgent，保留历史状态。
 
 实际配置：
 
