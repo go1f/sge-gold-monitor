@@ -28,10 +28,11 @@ def now_bjt():
 
 def should_run(current):
     t = current.time()
-    # Friday's night session continues into Saturday morning.
-    return ((current.weekday() < 5 and (time(9) <= t <= time(11, 30) or
-            time(13, 30) <= t <= time(15, 30) or t >= time(20))) or
-            (1 <= current.weekday() <= 5 and t <= time(2, 30)))
+    # Probe every calendar day, including special weekend trading sessions.
+    # Only fresh, validated SGE data may trigger reports or price alerts.
+    return (time(9) <= t <= time(11, 30) or
+            time(13, 30) <= t <= time(15, 30) or
+            t >= time(20) or t <= time(2, 30))
 
 
 def load_json(path):
@@ -108,7 +109,7 @@ def extract_quote(payload, current):
 
 def build_report_if_due(state, quote, current, threshold=835, high_threshold=None):
     day = current.date().isoformat()
-    if (current.weekday() < 5 and time(9, 30) <= current.time() < time(11, 31)
+    if (time(9, 30) <= current.time() < time(11, 31)
             and quote['open_price'] is not None and state.get('last_morning_report_date') != day):
         targets = f'低位 ≤{threshold:g} 元/克'
         if high_threshold is not None:
@@ -167,7 +168,7 @@ def main():
                                 if high_threshold is not None else '')
             send_bark(bark_url, '黄金监控已部署',
                       f'Au99.99 ≤{threshold:g} 元/克时提醒一次；交易日09:30开盘早报。'
-                      + high_description + '其它波动、周末日盘和休市不推送。此消息为部署验证。')
+                      + high_description + '周末如开市照常播报；休市和其它波动不推送。此消息为部署验证。')
             print('Bark accepted test notification')
             return 0
         if not args.dry_run and not should_run(current):

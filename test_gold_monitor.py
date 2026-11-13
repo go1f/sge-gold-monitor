@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime
 from pathlib import Path
 import gold_monitor as g
@@ -60,7 +61,7 @@ class MonitorTests(unittest.TestCase):
     def test_report_once_morning_only(self):
         quote = g.extract_quote(self.payload(), self.current())
         self.assertIsNotNone(g.build_report_if_due({}, quote, self.current()))
-        for when in ['2026-11-08 09:30:00', '2026-11-09 09:29:00', '2026-11-09 20:00:00']:
+        for when in ['2026-11-09 09:29:00', '2026-11-09 20:00:00']:
             self.assertIsNone(g.build_report_if_due({}, quote, self.current(when)))
         self.assertIsNone(g.build_report_if_due({'last_morning_report_date': '2026-11-09'}, quote, self.current()))
 
@@ -71,11 +72,42 @@ class MonitorTests(unittest.TestCase):
         self.assertIn('≥880', report[1])
 
     def test_sessions(self):
-        self.assertFalse(g.should_run(self.current('2026-11-08 09:30:00')))
-        self.assertFalse(g.should_run(self.current('2026-11-07 09:30:00')))
+        self.assertTrue(g.should_run(self.current('2026-11-08 09:30:00')))
+        self.assertTrue(g.should_run(self.current('2026-11-07 09:30:00')))
         self.assertTrue(g.should_run(self.current('2026-11-07 01:00:00')))
         self.assertTrue(g.should_run(self.current('2026-11-09 20:00:00')))
         self.assertFalse(g.should_run(self.current('2026-11-09 12:00:00')))
+
+    def run_with_payload(self, current, payload):
+        with tempfile.TemporaryDirectory() as temp:
+            state_path = Path(temp) / 'state.json'
+            with patch.object(g, 'CONFIG_PATH', Path(temp) / 'config.json'), \
+                 patch.object(g, 'now_bjt', return_value=current), \
+                 patch.object(g, 'fetch_quote_payload', return_value=payload), \
+                 patch.object(g, 'send_bark') as send, \
+                 patch('sys.argv', ['gold-monitor', '--state-path', str(state_path)]):
+                g.main()
+                first_count = send.call_count
+                g.main()
+                return first_count, send.call_count, g.load_json(state_path)
+
+    def test_weekend_open_market_sends_morning_report_once(self):
+        for day in ('2026-11-07', '2026-11-08'):
+            current = self.current(day + ' 09:30:00')
+            payload = self.payload()
+            payload['delaystr'] = current.strftime('%Y年%m月%d日 %H:%M:%S')
+            first, total, state = self.run_with_payload(current, payload)
+            self.assertEqual((first, total), (1, 1))
+            self.assertEqual(state['last_morning_report_date'], day)
+
+    def test_closed_market_with_stale_quote_sends_nothing(self):
+        # A fresh quote on the preceding trading day is stale on a closure,
+        # whether that closure falls on a weekday or a weekend.
+        for day in ('2026-11-10', '2026-11-14'):
+            first, total, state = self.run_with_payload(
+                self.current(day + ' 09:30:00'), self.payload())
+            self.assertEqual((first, total), (0, 0))
+            self.assertNotIn('last_morning_report_date', state)
 
 
 if __name__ == '__main__':
