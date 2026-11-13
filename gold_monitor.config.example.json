@@ -1,4 +1,5 @@
 {
   "bark_url": "https://api.day.app/YOUR_BARK_KEY/",
-  "price_threshold": 850
+  "price_threshold": 835,
+  "high_price_threshold": 880
 }

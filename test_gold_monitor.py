@@ -15,16 +15,33 @@ class MonitorTests(unittest.TestCase):
                     data=[870, 868, 860, 855, 840, 830])
 
     def test_exact_threshold_and_no_other_volatility(self):
-        self.assertTrue(g.should_send_alert({}, 850, 850))
-        self.assertTrue(g.should_send_alert({}, 849, 850))
-        self.assertFalse(g.should_send_alert({}, 851, 850))
-        self.assertFalse(g.should_send_alert({'notified_threshold': 850}, 800, 850))
+        self.assertTrue(g.should_send_alert({}, 835, 835))
+        self.assertTrue(g.should_send_alert({}, 834, 835))
+        self.assertFalse(g.should_send_alert({}, 836, 835))
+        self.assertFalse(g.should_send_alert({'notified_threshold': 835}, 800, 835))
 
     def test_persisted_alert_survives_restart(self):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'state.json'
-            g.save_state(path, {'notified_threshold': 850})
-            self.assertFalse(g.should_send_alert(g.load_json(path), 850, 850))
+            g.save_state(path, {'notified_threshold': 835})
+            self.assertFalse(g.should_send_alert(g.load_json(path), 835, 835))
+
+    def test_high_alert_boundary_disabled_and_deduplication(self):
+        self.assertFalse(g.should_send_high_alert({}, 879.99, 880))
+        self.assertTrue(g.should_send_high_alert({}, 880, 880))
+        self.assertTrue(g.should_send_high_alert({}, 900, 880))
+        self.assertFalse(g.should_send_high_alert({}, 900, None))
+        self.assertTrue(g.should_send_high_alert({'notified_threshold': 835}, 880, 880))
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'state.json'
+            g.save_state(path, {'notified_high_threshold': 880})
+            self.assertFalse(g.should_send_high_alert(g.load_json(path), 900, 880))
+            self.assertTrue(g.should_send_alert(g.load_json(path), 835, 835))
+
+    def test_no_alert_between_low_and_high_targets(self):
+        for price in (835.01, 850, 870, 879.99):
+            self.assertFalse(g.should_send_alert({}, price, 835))
+            self.assertFalse(g.should_send_high_alert({}, price, 880))
 
     def test_ignore_future_price_slots_and_night_open(self):
         quote = g.extract_quote(self.payload(), self.current())
@@ -46,6 +63,12 @@ class MonitorTests(unittest.TestCase):
         for when in ['2026-11-08 09:30:00', '2026-11-09 09:29:00', '2026-11-09 20:00:00']:
             self.assertIsNone(g.build_report_if_due({}, quote, self.current(when)))
         self.assertIsNone(g.build_report_if_due({'last_morning_report_date': '2026-11-09'}, quote, self.current()))
+
+    def test_report_contains_both_configured_targets(self):
+        quote = g.extract_quote(self.payload(), self.current())
+        report = g.build_report_if_due({}, quote, self.current(), 835, 880)
+        self.assertIn('≤835', report[1])
+        self.assertIn('≥880', report[1])
 
     def test_sessions(self):
         self.assertFalse(g.should_run(self.current('2026-11-08 09:30:00')))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SGE Au99.99: one target alert and one morning report per trading day."""
+"""SGE Au99.99: low/high target alerts and trading-day morning reports."""
 from __future__ import annotations
 
 import argparse
@@ -106,19 +106,27 @@ def extract_quote(payload, current):
             'quote_time': source.isoformat(), 'minute': times[last_index]}
 
 
-def build_report_if_due(state, quote, current):
+def build_report_if_due(state, quote, current, threshold=835, high_threshold=None):
     day = current.date().isoformat()
     if (current.weekday() < 5 and time(9, 30) <= current.time() < time(11, 31)
             and quote['open_price'] is not None and state.get('last_morning_report_date') != day):
+        targets = f'低位 ≤{threshold:g} 元/克'
+        if high_threshold is not None:
+            targets += f'，高位 ≥{high_threshold:g} 元/克'
         return (f'{SYMBOL} 开盘早报',
                 f"今日开盘 {quote['open_price']:.2f} 元/克，现价 {quote['price']:.2f} 元/克。"
-                f"行情时间 {quote['quote_time']}。监控运行中，目标 ≤850 元/克。源：上金所")
+                f"行情时间 {quote['quote_time']}。监控运行中，{targets}。源：上金所")
     return None
 
 
 def should_send_alert(state, price, threshold):
     # Persist across days and restarts: no repeat notifications while below target.
     return price <= threshold and state.get('notified_threshold') != threshold
+
+
+def should_send_high_alert(state, price, threshold):
+    return (threshold is not None and price >= threshold
+            and state.get('notified_high_threshold') != threshold)
 
 
 def send_bark(url, title, body):
@@ -145,14 +153,21 @@ def main():
     current = now_bjt()
     try:
         config = load_json(CONFIG_PATH)
-        threshold = float(config.get('price_threshold', 850))
+        threshold = float(config.get('price_threshold', 835))
         if not math.isfinite(threshold) or threshold <= 0:
             raise ValueError('Invalid target price')
+        high_threshold = config.get('high_price_threshold')
+        if high_threshold is not None:
+            high_threshold = float(high_threshold)
+            if not math.isfinite(high_threshold) or high_threshold <= threshold:
+                raise ValueError('High target price must exceed the low target price')
         bark_url = os.getenv('BARK_URL') or config.get('bark_url', '')
         if args.test_push:
+            high_description = (f' ≥{high_threshold:g} 元/克时高位提醒一次。'
+                                if high_threshold is not None else '')
             send_bark(bark_url, '黄金监控已部署',
                       f'Au99.99 ≤{threshold:g} 元/克时提醒一次；交易日09:30开盘早报。'
-                      '其它波动、周末日盘和休市不推送。此消息为部署验证。')
+                      + high_description + '其它波动、周末日盘和休市不推送。此消息为部署验证。')
             print('Bark accepted test notification')
             return 0
         if not args.dry_run and not should_run(current):
@@ -163,6 +178,7 @@ def main():
         except Exception as exc:
             if args.dry_run:
                 print(json.dumps({'checked_at': current.isoformat(), 'threshold': threshold,
+                                  'high_threshold': high_threshold,
                                   'market_session': should_run(current), 'quote_usable': False,
                                   'reason': str(exc)}, ensure_ascii=False, indent=2))
                 return 0
@@ -172,7 +188,9 @@ def main():
             print(f'{current.isoformat()} quote unavailable ({type(exc).__name__}); no push', file=sys.stderr)
             return 1
         if args.dry_run:
-            print(json.dumps(dict(quote, threshold=threshold, quote_usable=True,
+            print(json.dumps(dict(quote, threshold=threshold, high_threshold=high_threshold,
+                                 quote_usable=True,
+                                 would_high_alert=should_send_high_alert(state, quote['price'], high_threshold),
                                  would_alert=should_send_alert(state, quote['price'], threshold)),
                              ensure_ascii=False, indent=2))
             return 0
@@ -184,10 +202,15 @@ def main():
                       f"行情时间 {quote['quote_time']}。源：上金所")
             state.update(notified_threshold=threshold, last_alert_at=current.isoformat())
             save_state(args.state_path, state)
-        report = build_report_if_due(state, quote, current)
+        if should_send_high_alert(state, quote['price'], high_threshold):
+            send_bark(bark_url, f'黄金已到 {high_threshold:g} 元/克高位价位',
+                      f"{SYMBOL} 现价 {quote['price']:.2f} 元/克，已达到你设定的高位提醒条件。"
+                      f"行情时间 {quote['quote_time']}。源：上金所")
+            state.update(notified_high_threshold=high_threshold, last_high_alert_at=current.isoformat())
+            save_state(args.state_path, state)
+        report = build_report_if_due(state, quote, current, threshold, high_threshold)
         if report:
-            # Substitute configured target rather than hardcoding the default in reports.
-            send_bark(bark_url, report[0], report[1].replace('≤850', f'≤{threshold:g}'))
+            send_bark(bark_url, report[0], report[1])
             state['last_morning_report_date'] = current.date().isoformat()
             save_state(args.state_path, state)
         save_state(args.state_path, state)
