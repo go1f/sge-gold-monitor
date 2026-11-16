@@ -109,7 +109,7 @@ def extract_quote(payload, current):
 
 def build_report_if_due(state, quote, current, threshold=835, high_threshold=None):
     day = current.date().isoformat()
-    if (time(9, 30) <= current.time() < time(11, 31)
+    if (time(9, 25) <= current.time() < time(11, 31)
             and quote['open_price'] is not None and state.get('last_morning_report_date') != day):
         targets = f'低位 ≤{threshold:g} 元/克'
         if high_threshold is not None:
@@ -167,7 +167,7 @@ def main():
             high_description = (f' ≥{high_threshold:g} 元/克时高位提醒一次。'
                                 if high_threshold is not None else '')
             send_bark(bark_url, '黄金监控已部署',
-                      f'Au99.99 ≤{threshold:g} 元/克时提醒一次；交易日09:30开盘早报。'
+                      f'Au99.99 ≤{threshold:g} 元/克时提醒一次；交易日09:25开盘早报。'
                       + high_description + '周末如开市照常播报；休市和其它波动不推送。此消息为部署验证。')
             print('Bark accepted test notification')
             return 0

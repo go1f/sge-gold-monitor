@@ -61,9 +61,18 @@ class MonitorTests(unittest.TestCase):
     def test_report_once_morning_only(self):
         quote = g.extract_quote(self.payload(), self.current())
         self.assertIsNotNone(g.build_report_if_due({}, quote, self.current()))
-        for when in ['2026-11-09 09:29:00', '2026-11-09 20:00:00']:
+        for when in ['2026-11-09 09:24:59', '2026-11-09 20:00:00']:
             self.assertIsNone(g.build_report_if_due({}, quote, self.current(when)))
         self.assertIsNone(g.build_report_if_due({'last_morning_report_date': '2026-11-09'}, quote, self.current()))
+
+    def test_morning_report_starts_at_0925_and_is_sent_once(self):
+        quote = g.extract_quote(self.payload(), self.current())
+        before = self.current('2026-11-09 09:24:59')
+        due = self.current('2026-11-09 09:25:00')
+        self.assertIsNone(g.build_report_if_due({}, quote, before))
+        self.assertIsNotNone(g.build_report_if_due({}, quote, due))
+        self.assertIsNone(g.build_report_if_due(
+            {'last_morning_report_date': '2026-11-09'}, quote, due))
 
     def test_report_contains_both_configured_targets(self):
         quote = g.extract_quote(self.payload(), self.current())
